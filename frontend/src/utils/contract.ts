@@ -2,18 +2,15 @@ import { BrowserProvider, Contract, parseEther, type JsonRpcSigner } from 'ether
 import MarketplaceABI from '../abis/Marketplace.json'
 import NFTABI from '../abis/NFT.json'
 
-const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS
-const nftAddress = import.meta.env.VITE_NFT_ADDRESS
+const nftContractAddress = import.meta.env.VITE_NFT_CONTRACT_ADDRESS
+const marketplaceContractAddress = import.meta.env.VITE_MARKETPLACE_CONTRACT_ADDRESS
+const expectedChainId = BigInt(import.meta.env.VITE_CHAIN_ID || '11155111')
 
-if (!marketplaceAddress) {
-    throw new Error('VITE_MARKETPLACE_ADDRESS is not configured')
+if (!nftContractAddress || !marketplaceContractAddress) {
+    throw new Error('VITE_NFT_CONTRACT_ADDRESS and VITE_MARKETPLACE_CONTRACT_ADDRESS are required')
 }
 
-if (!nftAddress) {
-    throw new Error('VITE_NFT_ADDRESS is not configured')
-}
-
-export async function connectWallet() {
+export async function connectWallet(validateMarketplace = false) {
     if (!window.ethereum) {
         alert('MetaMask not found')
         return
@@ -21,6 +18,24 @@ export async function connectWallet() {
 
     const provider = new BrowserProvider(window.ethereum)
     await provider.send('eth_requestAccounts', [])
+    const network = await provider.getNetwork()
+    if (network.chainId !== expectedChainId) {
+        throw new Error(`Wrong network. Connect MetaMask to chain ${expectedChainId}.`)
+    }
+
+    if (validateMarketplace) {
+        const marketplace = new Contract(marketplaceContractAddress, MarketplaceABI.abi, provider)
+        const marketplaceCode = await provider.getCode(marketplaceContractAddress)
+        if (marketplaceCode === '0x') {
+            throw new Error(`No marketplace contract was found at ${marketplaceContractAddress} on chain ${expectedChainId}`)
+        }
+
+        const marketplaceNftAddress = await marketplace.nftContract()
+        if (marketplaceNftAddress.toLowerCase() !== nftContractAddress.toLowerCase()) {
+            throw new Error('The marketplace is configured for a different NFT contract')
+        }
+    }
+
     const signer = await provider.getSigner()
     const address = await signer.getAddress()
 
@@ -28,7 +43,7 @@ export async function connectWallet() {
 }
 
 export function getMarketplaceContract(signer: JsonRpcSigner) {
-    return new Contract(marketplaceAddress, MarketplaceABI.abi, signer)
+    return new Contract(marketplaceContractAddress, MarketplaceABI.abi, signer)
 }
 
 export async function mintNFT(tokenId: number, tokenURI: string) {
@@ -37,15 +52,33 @@ export async function mintNFT(tokenId: number, tokenURI: string) {
         throw new Error('Wallet connection was not established')
     }
 
-    const nft = new Contract(nftAddress, NFTABI.abi, wallet.signer)
+    const nft = new Contract(nftContractAddress, NFTABI.abi, wallet.signer)
     const tx = await nft.safeMint(wallet.address, tokenId, tokenURI)
 
     await tx.wait()
     console.log('Mint complete!')
 }
 
+export async function listNFT(tokenId: number, priceInEth: number) {
+    const wallet = await connectWallet(true)
+    if (!wallet) {
+        throw new Error('Wallet connection was not established')
+    }
+
+    const nft = new Contract(nftContractAddress, NFTABI.abi, wallet.signer)
+    const marketplace = getMarketplaceContract(wallet.signer)
+    const price = parseEther(priceInEth.toString())
+
+    const approval = await nft.approve(marketplaceContractAddress, tokenId)
+    await approval.wait()
+
+    const listing = await marketplace.listItem(tokenId, price)
+    await listing.wait()
+    console.log('Listing complete!')
+}
+
 export async function buyNFT(tokenId: number, priceInEth: number) {
-    const wallet = await connectWallet()
+    const wallet = await connectWallet(true)
     if (!wallet) {
         throw new Error('Wallet connection was not established')
     }

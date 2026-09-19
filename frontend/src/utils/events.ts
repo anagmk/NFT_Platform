@@ -1,17 +1,17 @@
 import { BrowserProvider, Contract } from 'ethers'
 import MarketplaceABI from '../abis/Marketplace.json'
 
-const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS
+const contractAddress = import.meta.env.VITE_MARKETPLACE_CONTRACT_ADDRESS
 
-if (!marketplaceAddress) {
-  throw new Error('VITE_MARKETPLACE_ADDRESS is not configured')
+if (!contractAddress) {
+  throw new Error('VITE_MARKETPLACE_CONTRACT_ADDRESS is not configured')
 }
 
 export async function listenForSales(
   onSale: (buyer: string, tokenId: bigint, price: bigint) => void
 ) {
   const provider = new BrowserProvider(window.ethereum!)
-  const marketplace = new Contract(marketplaceAddress, MarketplaceABI.abi, provider)
+  const marketplace = new Contract(contractAddress, MarketplaceABI.abi, provider)
 
   marketplace.on('Sold', (buyer, tokenId, price) => {
     onSale(buyer, tokenId, price)
@@ -22,7 +22,7 @@ export async function listenForSales(
 
 export async function getPastSales() {
   const provider = new BrowserProvider(window.ethereum!)
-  const marketplace = new Contract(marketplaceAddress, MarketplaceABI.abi, provider)
+  const marketplace = new Contract(contractAddress, MarketplaceABI.abi, provider)
 
   return await marketplace.queryFilter(marketplace.filters.Sold())
 }
