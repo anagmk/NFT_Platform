@@ -46,6 +46,24 @@ export function getMarketplaceContract(signer: JsonRpcSigner) {
     return new Contract(marketplaceContractAddress, MarketplaceABI.abi, signer)
 }
 
+export async function getNextTokenId() {
+    const wallet = await connectWallet()
+    if (!wallet) {
+        throw new Error('Wallet connection was not established')
+    }
+
+    const nft = new Contract(nftContractAddress, NFTABI.abi, wallet.provider)
+    let tokenId = 0
+    while (true) {
+        try {
+            await nft.ownerOf(tokenId)
+            tokenId += 1
+        } catch {
+            return tokenId
+        }
+    }
+}
+
 export async function mintNFT(tokenId: number, tokenURI: string) {
     const wallet = await connectWallet()
     if (!wallet) {
@@ -53,9 +71,33 @@ export async function mintNFT(tokenId: number, tokenURI: string) {
     }
 
     const nft = new Contract(nftContractAddress, NFTABI.abi, wallet.signer)
+    const nftOwner = await nft.owner()
+    if (nftOwner.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error(`Only the NFT owner can mint. Connect ${nftOwner} in MetaMask.`)
+    }
+
+    try {
+        const existingOwner = await nft.ownerOf(tokenId)
+        throw new Error(`Token ${tokenId} already exists and is owned by ${existingOwner}. Use a new token ID.`)
+    } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Token ')) {
+            throw error
+        }
+    }
+
     const tx = await nft.safeMint(wallet.address, tokenId, tokenURI)
 
     await tx.wait()
+    const response = await fetch('/api/listings/minted', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenId, owner: wallet.address, tokenURI }),
+    })
+    const result = await response.json()
+    if (!response.ok) {
+        throw new Error(result.error ?? 'Mint succeeded but the NFT was not saved to the database')
+    }
+
     console.log('Mint complete!')
 }
 
@@ -67,6 +109,17 @@ export async function listNFT(tokenId: number, priceInEth: number) {
 
     const nft = new Contract(nftContractAddress, NFTABI.abi, wallet.signer)
     const marketplace = getMarketplaceContract(wallet.signer)
+    let tokenOwner: string
+    try {
+        tokenOwner = await nft.ownerOf(tokenId)
+    } catch {
+        throw new Error(`Token ${tokenId} has not been minted yet. Mint it before listing.`)
+    }
+
+    if (tokenOwner.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error(`Cannot list token ${tokenId}. It is owned by ${tokenOwner}.`)
+    }
+
     const price = parseEther(priceInEth.toString())
 
     const approval = await nft.approve(marketplaceContractAddress, tokenId)

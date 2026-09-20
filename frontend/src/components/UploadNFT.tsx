@@ -1,11 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { uploadNFT } from '../utils/upload'
+import { getNextTokenId } from '../utils/contract'
+import MintButton from './MintButton'
+import ListButton from './ListButton'
 
 export default function UploadNFT() {
   const [file, setFile] = useState<File | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [tokenURI, setTokenURI] = useState<string | null>(null)
+  const [tokenId, setTokenId] = useState<number | null>(null)
+  const [isMinted, setIsMinted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -19,10 +24,13 @@ export default function UploadNFT() {
     setIsUploading(true)
     setError(null)
     setTokenURI(null)
+    setIsMinted(false)
 
     try {
       const result = await uploadNFT(file, name, description)
+      const nextTokenId = await getNextTokenId()
       setTokenURI(result)
+      setTokenId(nextTokenId)
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Upload failed')
     } finally {
@@ -55,7 +63,18 @@ export default function UploadNFT() {
         {isUploading ? 'Uploading...' : 'Upload NFT'}
       </button>
       {error && <p role="alert">{error}</p>}
-      {tokenURI && <p>Token URI: {tokenURI}</p>}
+      {tokenURI && tokenId !== null && (
+        <>
+          <p>Token ID: {tokenId}</p>
+          <p>Token URI: {tokenURI}</p>
+          <MintButton
+            tokenId={tokenId}
+            tokenURI={tokenURI}
+            onMinted={() => setIsMinted(true)}
+          />
+          <ListButton tokenId={tokenId} price={0.1} disabled={!isMinted} />
+        </>
+      )}
     </form>
   )
 }

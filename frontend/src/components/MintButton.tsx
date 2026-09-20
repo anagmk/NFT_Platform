@@ -4,9 +4,10 @@ import { useState } from 'react'
 interface MintButtonProps {
   tokenId: number
   tokenURI: string
+  onMinted: () => void
 }
 
-export default function MintButton({ tokenId, tokenURI }: MintButtonProps) {
+export default function MintButton({ tokenId, tokenURI, onMinted }: MintButtonProps) {
   const [isMinting, setIsMinting] = useState(false)
 
   const handleMint = async () => {
@@ -15,6 +16,7 @@ export default function MintButton({ tokenId, tokenURI }: MintButtonProps) {
     setIsMinting(true)
     try {
       await mintNFT(tokenId, tokenURI)
+      onMinted()
       alert('Mint successful!')
     } catch (error) {
       console.error(error)
