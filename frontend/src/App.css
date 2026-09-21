@@ -17,6 +17,26 @@
   }
 }
 
+section {
+  width: min(100%, 720px);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+ol {
+  display: grid;
+  gap: 12px;
+  padding-left: 28px;
+}
+
+li {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .hero {
   position: relative;
 

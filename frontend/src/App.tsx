@@ -1,12 +1,12 @@
 import './App.css'
-import BuyButton from './components/BuyButton'
 import UploadNFT from './components/UploadNFT'
+import MarketplaceListings from './components/MarketplaceListings'
 
 function App() {
   return (
     <>
       <UploadNFT />
-      <BuyButton tokenId={1} price={0.1} />
+      <MarketplaceListings />
     </>
   )
 }

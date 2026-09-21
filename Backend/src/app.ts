@@ -1,7 +1,7 @@
+import cors from "cors";
 import express from "express";
-const uploadRoutes = require("./routes/uploadRoutes");
-const cors = require("cors");
-const listingRoutes = require("./routes/listingRoutes");
+import listingRoutes from "./routes/nft/listingRoutes";
+import uploadRoutes from "./routes/upload/uploadRoutes";
 
 const app = express();
 

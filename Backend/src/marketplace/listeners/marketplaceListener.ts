@@ -1,29 +1,43 @@
-const { provider, marketplace } = require("../config/blockchain");
-const Listing = require("../models/Listing");
+import { provider, marketplace, contractAddress } from "../../config/blockchain";
+import Listing from "../../models/Listing";
+import NFT from "../../models/NFT";
+
 const BLOCK_RANGE = 9_000;
 const DEFAULT_INITIAL_SYNC_BLOCKS = 100_000;
 
+type MarketplaceEvent = {
+  fragment: { name: string };
+  args: any;
+  blockNumber: number;
+  index: number;
+};
+
 function startMarketplaceListener() {
   const eventTopics = [
-    marketplace.interface.getEvent("Listed").topicHash,
-    marketplace.interface.getEvent("Sold").topicHash,
-    marketplace.interface.getEvent("Cancelled").topicHash,
+    marketplace.interface.getEvent("Listed")!.topicHash,
+    marketplace.interface.getEvent("Sold")!.topicHash,
+    marketplace.interface.getEvent("Cancelled")!.topicHash,
   ];
 
-  const saveListing = async (tokenId, seller, price) => {
-    const listing = await Listing.findOneAndUpdate(
+  const saveListing = async (tokenId: bigint, seller: string, price: bigint) => {
+    await Listing.findOneAndUpdate(
       { tokenId: Number(tokenId) },
       { seller, price: price.toString(), listing: true, active: true },
       { upsert: true, returnDocument: "after" }
     );
-
-    console.log(`Saved listing ${listing.tokenId} to MongoDB`);
   };
 
-  const markInactive = async (tokenId) => {
+  const markInactive = async (tokenId: bigint) => {
     await Listing.findOneAndUpdate(
       { tokenId: Number(tokenId) },
       { listing: false, active: false }
+    );
+  };
+
+  const updateTokenOwner = async (tokenId: bigint, owner: string) => {
+    await NFT.findOneAndUpdate(
+      { contractAddress: contractAddress!.toLowerCase(), tokenId: Number(tokenId) },
+      { owner }
     );
   };
 
@@ -39,7 +53,7 @@ function startMarketplaceListener() {
     }
 
     console.log(`Syncing marketplace events from block ${startBlock} to ${latestBlock}`);
-    const events = [];
+    const events: MarketplaceEvent[] = [];
     for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += BLOCK_RANGE + 1) {
       const toBlock = Math.min(fromBlock + BLOCK_RANGE, latestBlock);
       const logs = await provider.getLogs({
@@ -62,25 +76,25 @@ function startMarketplaceListener() {
       }
     }
 
-    events.sort((left, right) => {
-      if (left.blockNumber !== right.blockNumber) {
-        return left.blockNumber - right.blockNumber;
-      }
-      return left.index - right.index;
-    });
+    events.sort((left, right) => left.blockNumber - right.blockNumber || left.index - right.index);
 
     for (const event of events) {
       if (event.fragment.name === "Listed") {
         await saveListing(event.args.tokenId, event.args.seller, event.args.price);
+        await updateTokenOwner(event.args.tokenId, event.args.seller);
+      } else if (event.fragment.name === "Sold") {
+        await markInactive(event.args.tokenId);
+        await updateTokenOwner(event.args.tokenId, event.args.buyer);
       } else {
         await markInactive(event.args.tokenId);
+        await updateTokenOwner(event.args.tokenId, event.args.seller);
       }
     }
 
     console.log(`Synced ${events.length} marketplace events`);
   };
 
-  syncMarketplaceEvents().catch((error) => {
+  syncMarketplaceEvents().catch((error: unknown) => {
     console.error("Failed to sync marketplace listings:", error);
   });
 
@@ -90,13 +104,16 @@ function startMarketplaceListener() {
       if (!event) return;
 
       if (event.name === "Listed") {
-        console.log(`Listed: token ${event.args.tokenId} by ${event.args.seller}`);
         await saveListing(event.args.tokenId, event.args.seller, event.args.price);
-      } else {
-        console.log(`${event.name}: token ${event.args.tokenId}`);
+        await updateTokenOwner(event.args.tokenId, event.args.seller);
+      } else if (event.name === "Sold") {
         await markInactive(event.args.tokenId);
+        await updateTokenOwner(event.args.tokenId, event.args.buyer);
+      } else {
+        await markInactive(event.args.tokenId);
+        await updateTokenOwner(event.args.tokenId, event.args.seller);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to persist marketplace event:", error);
     }
   });
@@ -104,4 +121,4 @@ function startMarketplaceListener() {
   console.log("Marketplace event listener started");
 }
 
-module.exports = startMarketplaceListener;
+export default startMarketplaceListener;
