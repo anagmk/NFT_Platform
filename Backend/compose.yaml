@@ -1,0 +1,32 @@
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: otp-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build: .
+    container_name: otp-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 5001
+      MONGO_URI: mongodb://host.docker.internal:27017/NFT
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      - redis
+    ports:
+      - "5001:5001"
+
+volumes:
+  redis_data:

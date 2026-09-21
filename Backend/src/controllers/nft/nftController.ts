@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import Listing from "../../models/Listing";
 import NFT from "../../models/NFT";
+import { logError } from "../../middleware/errorHandler";
 
 export async function saveMintedNFT(req: Request, res: Response) {
   try {
@@ -33,7 +34,7 @@ export async function saveMintedNFT(req: Request, res: Response) {
 
     return res.status(200).json(nft);
   } catch (error) {
-    console.error("Failed to save minted NFT:", error);
+    logError("Failed to save minted NFT", error);
     return res.status(500).json({ error: "Failed to save minted NFT" });
   }
 }

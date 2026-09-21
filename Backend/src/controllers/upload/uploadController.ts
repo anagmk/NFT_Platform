@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import pinata from "../../config/pinata";
+import { logError } from "../../middleware/errorHandler";
 
 export async function uploadFile(req: Request, res: Response) {
   try {
@@ -12,7 +13,7 @@ export async function uploadFile(req: Request, res: Response) {
 
     return res.status(200).json({ cid: result.cid, url: `ipfs://${result.cid}` });
   } catch (error) {
-    console.error(error);
+    logError("File upload failed", error);
     return res.status(500).json({ error: "Upload failed" });
   }
 }
@@ -37,7 +38,7 @@ export async function uploadMetadata(req: Request, res: Response) {
 
     return res.status(200).json({ cid: result.cid, tokenURI: `ipfs://${result.cid}` });
   } catch (error) {
-    console.error(error);
+    logError("Metadata upload failed", error);
     return res.status(500).json({ error: "Metadata upload failed" });
   }
 }
